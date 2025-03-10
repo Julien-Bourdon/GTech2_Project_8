@@ -1,0 +1,12 @@
+# Définir la normalisation des fins de ligne pour tous les fichiers texte
+* text=auto
+
+# Fichiers Unity spécifiques
+*.cs text diff=csharp
+*.cginc text
+*.shader text
+
+# Fichiers binaires Unity
+*.unity binary
+*.prefab binary
+*.asset binary
