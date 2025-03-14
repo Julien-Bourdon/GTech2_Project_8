@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class Player_Controller : MonoBehaviour
 {
-    [Header("Déplacement")]
+    [Header("Dï¿½placement")]
     public float vitesseDeplacement = 5.0f;
     public float vitesseCourse = 10.0f; // Vitesse quand on appuie sur Shift
     public KeyCode toucheCourse = KeyCode.LeftShift;
@@ -12,6 +12,13 @@ public class Player_Controller : MonoBehaviour
     public float forceSaut = 5.0f;
     public KeyCode toucheSaut = KeyCode.Space;
     private bool estAuSol;
+
+    [Header("Escalade")]
+    public KeyCode toucheEscalade = KeyCode.E; // Touche pour escalader
+    public float vitesseEscalade = 3.0f;
+    public float distanceMurDetect = 1.2f; // Distance pour dï¿½tecter un mur
+    private bool estEnEscalade = false;
+
 
     [Header("Rotation")]
     public float sensibiliteSouris = 2.0f;
@@ -32,6 +39,10 @@ public class Player_Controller : MonoBehaviour
     public KeyCode toucheLancer = KeyCode.Mouse0;
     public KeyCode toucheRecuperer = KeyCode.R;
     public float forceLancer = 600f;
+    public float forceLancerMax = 1200f; // Force maximale de lancer
+    public float tempsChargeMax = 2.0f; // Temps maximum de charge
+    private float tempsCharge = 0.0f;
+    private bool estEnCharge = false;
     public Script_Ball script_Ball;
 
     private float rotationX = 0.0f;
@@ -41,38 +52,45 @@ public class Player_Controller : MonoBehaviour
 
     void Start()
     {
-        // Verrouille et cache le curseur pour une expérience FPS plus immersive
+        // Verrouille et cache le curseur pour une expï¿½rience FPS plus immersive
         if (verrouillagesCurseur)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
 
-        // Récupérer le composant Rigidbody
+        // Rï¿½cupï¿½rer le composant Rigidbody
         if(rigidBody == null)
         {
             rigidBody = GetComponent<Rigidbody>();
+            rigidBody.useGravity = true;
+            rigidBody.constraints = RigidbodyConstraints.FreezeRotation;
         }
 
         if (balle != null)
         {
             script_Ball = balle.GetComponentInChildren<Script_Ball>();
-            Debug.Log("Balle trouvée : " + balle.name);
+            Debug.Log("Balle trouvï¿½e : " + balle.name);
             if(script_Ball == null)
             {
-                Debug.LogError("Aucun script 'Script_Ball' trouvé sur la balle !");
+                Debug.LogError("Aucun script 'Script_Ball' trouvï¿½ sur la balle !");
             }
         }
         else
         {
-            Debug.LogError("Aucune balle trouvée avec le tag 'Ball' !");
+            Debug.LogError("Aucune balle trouvï¿½e avec le tag 'Ball' !");
         }
 
     }
 
     void Update()
     {
-        // Gestion du curseur (échap pour déverrouiller/reverrouiller)
+        float mouvementAvant = 0.0f;
+        float mouvementLateral = 0.0f;
+        float mouvementVertical = 0.0f;
+        Vector3 deplacement;
+
+        // Gestion du curseur (ï¿½chap pour dï¿½verrouiller/reverrouiller)
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             verrouillagesCurseur = !verrouillagesCurseur;
@@ -80,11 +98,11 @@ public class Player_Controller : MonoBehaviour
             Cursor.visible = !verrouillagesCurseur;
         }
 
-        // Vérification si le joueur est en train de courir
+        // Vï¿½rification si le joueur est en train de courir
         estEnCourse = Input.GetKey(toucheCourse);
         float vitesse = estEnCourse ? vitesseCourse : vitesseDeplacement;
 
-        // ROTATION - Contrôle avec la souris
+        // ROTATION - Contrï¿½le avec la souris
         if (verrouillagesCurseur) // Ne pas tourner si le curseur est libre
         {
             float sourisX = Input.GetAxis("Mouse X") * sensibiliteSouris;
@@ -93,7 +111,7 @@ public class Player_Controller : MonoBehaviour
             // Rotation horizontale (gauche/droite)
             rotationY += sourisX;
 
-            // Rotation verticale (haut/bas) avec limite pour éviter de faire des tours complets
+            // Rotation verticale (haut/bas) avec limite pour ï¿½viter de faire des tours complets
             rotationX -= sourisY; // Inverser pour que ce soit intuitif
             rotationX = Mathf.Clamp(rotationX, -limiteRotationVerticale, limiteRotationVerticale);
 
@@ -101,60 +119,94 @@ public class Player_Controller : MonoBehaviour
             transform.GetChild(0).rotation = Quaternion.Euler(rotationX, rotationY, 0);
         }
 
-        // DÉPLACEMENT - ZQSD/WASD et flèches
-        float mouvementAvant = 0;
-        float mouvementLateral = 0;
+        RaycastHit hit;
+        bool estContreMur = Physics.Raycast(transform.position, transform.forward, out hit, distanceMurDetect);
 
-        // Mouvement avant/arrière
-        if (Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))
-            mouvementAvant += 1.0f;
-        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
-            mouvementAvant -= 1.0f;
-
-        // Mouvement latéral
-        if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
-            mouvementLateral += 1.0f;
-        if (Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
-            mouvementLateral -= 1.0f;
-
-        // Lancement de la balle
-        if (Input.GetKeyDown(toucheLancer) && script_Ball != null && script_Ball.estSurJoueur)
+        // Mode escalade
+        if (estContreMur && Input.GetKey(toucheEscalade))
         {
-            script_Ball.LancerBalle(forceLancer);
+
+            estEnEscalade = true;
+            GetComponent<Rigidbody>().useGravity = false; // Dï¿½sactiver la gravitï¿½
+            GetComponent<Rigidbody>().velocity = Vector3.zero; // Stopper les mouvements involontaires
+
+            if (Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))
+                mouvementVertical += 1.0f;
+            if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
+                mouvementVertical -= 1.0f;
+
+        }
+        else
+        {
+            estEnEscalade = false;
+            rigidBody.useGravity = true; // Rï¿½activer la gravitï¿½ quand on lï¿½che la touche
         }
 
-        // Récupérer la balle 
-        if (Input.GetKeyDown(KeyCode.R) && script_Ball != null && !script_Ball.estSurJoueur)
+
+        if (!estEnEscalade)
+        {
+
+            if (Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))
+                mouvementAvant += 1.0f;
+            if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
+                mouvementAvant -= 1.0f;
+            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+                mouvementLateral += 1.0f;
+            if (Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
+                mouvementLateral -= 1.0f;
+
+            //transform.position += deplacement * vitesse * Time.deltaTime;
+        }
+
+
+        // Gestion de la charge pour lancer la balle
+        if (Input.GetKey(toucheLancer) && script_Ball != null && script_Ball.estSurJoueur)
+        {
+            estEnCharge = true;
+            tempsCharge += Time.deltaTime;
+            tempsCharge = Mathf.Clamp(tempsCharge, 0, tempsChargeMax);
+        }
+
+        if (Input.GetKeyUp(toucheLancer) && estEnCharge)
+        {
+            float force = Mathf.Lerp(forceLancer, forceLancerMax, tempsCharge / tempsChargeMax);
+            script_Ball.LancerBalle(force);
+            estEnCharge = false;
+            tempsCharge = 0.0f;
+        }
+
+        // Rï¿½cupï¿½rer la balle 
+        if (Input.GetKeyDown(toucheRecuperer) && script_Ball != null && !script_Ball.estSurJoueur)
         {
             script_Ball.RetournerBalle();
         }
 
         // SAUT - Appliquer une force vers le haut
-        if (Input.GetKeyDown(toucheSaut) && estAuSol)
+        if (Input.GetKeyDown(toucheSaut) && (estAuSol || estEnEscalade))
         {
             rigidBody.AddForce(Vector3.up * forceSaut, ForceMode.Impulse);
         }
 
-        // Calculer le vecteur de déplacement
+        // Calculer le vecteur de dï¿½placement
         Vector3 forward = transform.GetChild(0).forward;
         forward.y = 0; // Annuler la composante verticale
         forward.Normalize(); // Normaliser le vecteur
 
         Vector3 right = transform.GetChild(0).right;
 
-        Vector3 deplacement = forward * mouvementAvant + right * mouvementLateral;
+        deplacement = forward * mouvementAvant * vitesse * Time.deltaTime + right * mouvementLateral * vitesse * Time.deltaTime + mouvementVertical * Vector3.up * vitesseEscalade * Time.deltaTime;
 
-        // Normaliser pour éviter une vitesse plus rapide dans les diagonales
+        // Normaliser pour ï¿½viter une vitesse plus rapide dans les diagonales
         if (deplacement.magnitude > 1.0f)
             deplacement.Normalize();
 
-        // Appliquer le déplacement (multiplier par vitesse et deltaTime pour mouvement fluide)
-        transform.position += deplacement * vitesse * Time.deltaTime;
+        // Appliquer le dï¿½placement (multiplier par vitesse et deltaTime pour mouvement fluide)
+        transform.position += deplacement;
     }
 
     void OnCollisionStay(Collision collision)
     {
-        // Vérifier si le joueur est au sol
+        // Vï¿½rifier si le joueur est au sol
         if (collision.gameObject.CompareTag("Floor"))
         {
             estAuSol = true;
@@ -163,7 +215,7 @@ public class Player_Controller : MonoBehaviour
 
     void OnCollisionExit(Collision collision)
     {
-        // Vérifier si le joueur quitte le sol
+        // Vï¿½rifier si le joueur quitte le sol
         if (collision.gameObject.CompareTag("Floor"))
         {
             estAuSol = false;
@@ -172,13 +224,13 @@ public class Player_Controller : MonoBehaviour
 
     void OnGUI()
     {
-        // Cette fonction dessine un petit carré au centre de l'écran
+        // Cette fonction dessine un petit carrï¿½ au centre de l'ï¿½cran
         if (afficherPointCentral)
         {
-            // Crée un style temporaire pour notre point
+            // Crï¿½e un style temporaire pour notre point
             GUIStyle stylePoint = new GUIStyle();
 
-            // Crée une texture de la couleur souhaitée
+            // Crï¿½e une texture de la couleur souhaitï¿½e
             Texture2D texture = new Texture2D(1, 1);
             texture.SetPixel(0, 0, couleurPoint);
             texture.Apply();
@@ -186,7 +238,7 @@ public class Player_Controller : MonoBehaviour
             // Applique la texture au background du style
             stylePoint.normal.background = texture;
 
-            // Dessine un petit carré au milieu de l'écran avec notre style personnalisé
+            // Dessine un petit carrï¿½ au milieu de l'ï¿½cran avec notre style personnalisï¿½
             float centreX = Screen.width / 2;
             float centreY = Screen.height / 2;
             GUI.Box(new Rect(centreX - taillePoint / 2, centreY - taillePoint / 2, taillePoint, taillePoint), "", stylePoint);

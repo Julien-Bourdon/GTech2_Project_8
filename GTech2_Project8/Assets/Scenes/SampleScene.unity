@@ -1057,6 +1057,9 @@ MonoBehaviour:
   toucheCourse: 304
   forceSaut: 1000
   toucheSaut: 32
+  toucheEscalade: 101
+  vitesseEscalade: 3
+  distanceMurDetect: 1.2
   sensibiliteSouris: 2
   limiteRotationVerticale: 80
   verrouillagesCurseur: 1
@@ -1065,8 +1068,10 @@ MonoBehaviour:
   taillePoint: 4
   balle: {fileID: 140033351}
   toucheLancer: 323
-  toucheRecuperer: 114
+  toucheRecuperer: 324
   forceLancer: 600
+  forceLancerMax: 1200
+  tempsChargeMax: 2
   script_Ball: {fileID: 140033353}
   rigidBody: {fileID: 0}
 --- !u!1 &1629783125
@@ -1257,7 +1262,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1960696330}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
